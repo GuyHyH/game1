@@ -1,1 +1,686 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>เกมกระต่ายตะลุยวันสุนทรภู่</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            margin: 0;
+            overflow: hidden; /* Prevent scrolling on mobile */
+            background-color: #87CEEB; /* Sky blue fallback */
+            touch-action: none; /* Prevent swipe-to-refresh on mobile */
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
 
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            z-index: 20;
+            transition: opacity 0.3s;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .btn {
+            background: linear-gradient(to bottom, #4ade80, #22c55e);
+            border: 4px solid #166534;
+            border-radius: 999px;
+            padding: 12px 32px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 0 #166534;
+            box-shadow: 0 8px 0 #166534, 0 15px 20px rgba(0,0,0,0.4);
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.1s;
+            user-select: none;
+        }
+
+        .btn:active {
+            transform: translateY(8px);
+            box-shadow: 0 0 0 #166534, 0 5px 10px rgba(0,0,0,0.4);
+        }
+
+        /* HUD (Heads Up Display) */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 16px;
+            z-index: 10;
+            pointer-events: none; /* Let clicks pass through to canvas */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            border: 4px solid #333;
+            border-radius: 16px;
+            padding: 12px 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            text-align: center;
+            color: #333;
+        }
+
+        #question-text {
+            font-size: 1.25rem;
+            font-weight: 600;
+            max-width: 90%;
+            word-wrap: break-word;
+        }
+
+        .score-badge {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: #fbbf24;
+            border: 3px solid #b45309;
+            color: #78350f;
+            font-weight: 800;
+            font-size: 1.5rem;
+            padding: 8px 16px;
+            border-radius: 999px;
+            box-shadow: 0 4px 0 #b45309;
+        }
+
+        /* Feedback Animation */
+        @keyframes popUp {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop {
+            animation: popUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* Mobile specific adjustments */
+        @media (max-width: 600px) {
+            #question-text { font-size: 1rem; padding: 8px 12px; }
+            .score-badge { font-size: 1.2rem; top: 10px; right: 10px; padding: 4px 12px; }
+            .btn { font-size: 1.2rem; padding: 10px 24px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- Main Game Canvas -->
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- In-Game HUD -->
+        <div id="hud" class="hidden">
+            <div class="score-badge">คะแนน: <span id="score-display">0</span>/10</div>
+            <div class="glass-panel w-full max-w-2xl mt-12 md:mt-4">
+                <div id="question-number" class="text-sm text-gray-500 font-bold mb-1">ข้อที่ 1/10</div>
+                <div id="question-text">เตรียมตัวให้พร้อม...</div>
+            </div>
+            <div id="instructions" class="mt-auto mb-8 text-white text-shadow-md text-lg font-bold bg-black/50 px-4 py-2 rounded-full">
+                แตะหน้าจอ หรือ กด Spacebar เพื่อกระโดด 🐇
+            </div>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="overlay">
+            <div class="text-center animate-pop">
+                <div class="text-6xl mb-4">📜🐇🌊</div>
+                <h1 class="text-4xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-500 drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] mb-2">
+                    กระต่ายน้อย
+                </h1>
+                <h2 class="text-3xl md:text-4xl font-bold text-white drop-shadow-[0_3px_3px_rgba(0,0,0,0.8)] mb-8">
+                    ตะลุยวันสุนทรภู่
+                </h2>
+                <div class="bg-white/10 p-6 rounded-2xl backdrop-blur-sm border border-white/20 mb-8 max-w-md mx-4">
+                    <p class="text-lg mb-4">ช่วยน้องกระต่ายกระโดดเลือกคำตอบที่ถูกต้อง!</p>
+                    <ul class="text-left text-sm md:text-base space-y-2">
+                        <li>👆 <strong>วิธีเล่น:</strong></li>
+                        <li>- กด <strong>กระโดด</strong> เพื่อเลือกป้ายคำตอบด้านบน</li>
+                        <li>- <strong>ไม่ต้องกระโดด</strong> เพื่อเลือกป้ายคำตอบด้านล่าง</li>
+                        <li>- ตอบถูกได้ 1 คะแนน (มีทั้งหมด 10 ข้อ)</li>
+                    </ul>
+                </div>
+                <button id="start-btn" class="btn">เริ่มเกมเลย!</button>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over-screen" class="overlay hidden">
+            <div class="text-center bg-white rounded-3xl p-8 max-w-sm mx-4 border-8 border-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.5)] transform transition-all">
+                <div id="result-icon" class="text-6xl mb-4">🏆</div>
+                <h2 class="text-3xl font-extrabold text-gray-800 mb-2">สรุปคะแนน</h2>
+                <div class="text-6xl font-black text-blue-600 mb-2" id="final-score">0</div>
+                <div class="text-xl text-gray-600 font-bold mb-6">จาก 10 คะแนนเต็ม</div>
+                <p id="result-message" class="text-lg text-gray-700 mb-8 font-semibold"></p>
+                <button id="restart-btn" class="btn w-full">เล่นอีกครั้ง</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI Elements
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const hud = document.getElementById('hud');
+        const scoreDisplay = document.getElementById('score-display');
+        const questionText = document.getElementById('question-text');
+        const questionNumber = document.getElementById('question-number');
+        const finalScore = document.getElementById('final-score');
+        const resultMessage = document.getElementById('result-message');
+        const resultIcon = document.getElementById('result-icon');
+        const instructions = document.getElementById('instructions');
+
+        // Game State
+        let state = 'START'; // START, PLAYING, RESULT_WAIT, GAMEOVER
+        let animationId;
+        let score = 0;
+        let currentQuestionIndex = 0;
+        let frames = 0;
+        let gameSpeed = 4;
+        const maxQuestions = 10;
+
+        // Resize Canvas to fit screen fully
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            // Adjust ground level based on screen height
+            groundLevel = canvas.height - (canvas.height * 0.2); // 20% from bottom
+            
+            // Re-position rabbit if it exists
+            if (rabbit) {
+                rabbit.y = groundLevel - rabbit.height;
+                rabbit.groundY = groundLevel - rabbit.height;
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // --- Question Database (วันสุนทรภู่) ---
+        const questionBank = [
+            { q: "สุนทรภู่เกิดในรัชกาลใด?", a1: "รัชกาลที่ 1", a2: "รัชกาลที่ 2", ans: 1 },
+            { q: "วันสุนทรภู่ ตรงกับวันที่เท่าไหร่?", a1: "26 กรกฎาคม", a2: "26 มิถุนายน", ans: 2 },
+            { q: "ผลงานชิ้นเอกของสุนทรภู่คือเรื่องใด?", a1: "พระอภัยมณี", a2: "ขุนช้างขุนแผน", ans: 1 },
+            { q: "บิดาของสุนทรภู่เป็นชาวจังหวัดใด?", a1: "เพชรบุรี", a2: "ระยอง", ans: 2 },
+            { q: "สุนทรภู่ได้รับการยกย่องจาก UNESCO ในฐานะใด?", a1: "บุคคลสำคัญของโลก", a2: "กวีเอกของโลก", ans: 1 },
+            { q: "ตัวละครใด ไม่ได้ อยู่ในเรื่องพระอภัยมณี?", a1: "ผีเสื้อสมุทร", a2: "หนุมาน", ans: 2 },
+            { q: "พาหนะของสุดสาครคืออะไร?", a1: "ม้านิลมังกร", a2: "ช้างเอราวัณ", ans: 1 },
+            { q: "ใครคือผู้เลี้ยงดูสุดสาครตอนเด็ก?", a1: "พระอภัยมณี", a2: "พระฤาษี", ans: 2 },
+            { q: "สุนทรภู่ถึงแก่กรรมในสมัยรัชกาลใด?", a1: "รัชกาลที่ 4", a2: "รัชกาลที่ 3", ans: 1 },
+            { q: "ตำแหน่งบรรดาศักดิ์สูงสุดของสุนทรภู่คือ?", a1: "หลวงสุนทรโวหาร", a2: "พระสุนทรโวหาร", ans: 2 },
+            { q: "นิราศเรื่องแรกของสุนทรภู่คือเรื่องใด?", a1: "นิราศเมืองแกลง", a2: "นิราศภูเขาทอง", ans: 1 },
+            { q: "เครื่องดนตรีประจำตัวของพระอภัยมณีคืออะไร?", a1: "ขลุ่ย", a2: "ปี่", ans: 2 },
+            { q: "มารดาของสุนทรภู่เป็นแม่นมของพระธิดาในกรมใด?", a1: "กรมพระราชวังบวร", a2: "กรมพระราชวังหลัง", ans: 2 },
+            { q: "เกาะแก้วพิสดาร อยู่ในวรรณคดีเรื่องใด?", a1: "พระอภัยมณี", a2: "สิงหไกรภพ", ans: 1 },
+            { q: "สัตว์ประหลาดที่กินคนในเรื่องพระอภัยมณีคือ?", a1: "ม้านิลมังกร", a2: "ผีเสื้อสมุทร", ans: 2 }
+        ];
+        let selectedQuestions = [];
+
+        // Utility to shuffle array
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        let groundLevel = 0;
+
+        // Rabbit Entity
+        const rabbit = {
+            x: 50,
+            y: 0,
+            width: 60,
+            height: 60,
+            vy: 0,
+            gravity: 0.8,
+            jumpPower: -16,
+            groundY: 0,
+            isJumping: false,
+            frameX: 0,
+            timer: 0,
+            
+            draw() {
+                // Simple bouncing animation for running
+                let bounceY = 0;
+                if (!this.isJumping) {
+                    this.timer++;
+                    if (this.timer % 10 < 5) bounceY = -5;
+                }
+
+                ctx.save(); // บันทึกสถานะเดิมของ Canvas
+                // ย้ายจุดวาดไปตรงกลางของกระต่ายเพื่อเป็นจุดศูนย์กลางในการพลิก
+                ctx.translate(this.x + this.width / 2, this.y + bounceY);
+                ctx.scale(-1, 1); // พลิกแกน X เพื่อให้กระต่ายหันขวา
+
+                ctx.font = "60px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "top";
+                // Add shadow
+                ctx.shadowColor = "rgba(0,0,0,0.3)";
+                ctx.shadowBlur = 10;
+                ctx.shadowOffsetX = -5; // ปรับทิศทางเงาเนื่องจากแกน X ถูกพลิก
+                ctx.shadowOffsetY = 5;
+                
+                ctx.fillText("🐇", 0, 0); // วาดที่ตำแหน่ง 0,0 เพราะเรา translate มาแล้ว
+                
+                ctx.restore(); // คืนค่า Canvas กลับเป็นปกติเพื่อไม่ให้กระทบส่วนอื่น
+            },
+            
+            update() {
+                // Apply Gravity
+                this.vy += this.gravity;
+                this.y += this.vy;
+
+                // Ground Collision
+                if (this.y >= this.groundY) {
+                    this.y = this.groundY;
+                    this.vy = 0;
+                    this.isJumping = false;
+                }
+            },
+            
+            jump() {
+                if (!this.isJumping) {
+                    this.vy = this.jumpPower;
+                    this.isJumping = true;
+                    // Hide instructions after first jump
+                    if(!instructions.classList.contains('hidden')) {
+                        instructions.classList.add('hidden');
+                    }
+                }
+            }
+        };
+
+        // Choices/Obstacles (Signs)
+        class Sign {
+            constructor(x, lane, text, isCorrect) {
+                this.x = x;
+                this.lane = lane; // 'top' or 'bottom'
+                this.width = 220;
+                this.height = 70;
+                this.text = text;
+                this.isCorrect = isCorrect;
+                this.active = true;
+                this.hit = false; // Flag if rabbit already collided with it
+                
+                // Calculate Y position based on lane
+                // Top lane requires a jump. Bottom lane requires staying on ground.
+                if (lane === 'top') {
+                    // Positioned so apex of jump hits it
+                    this.y = groundLevel - rabbit.height - 140; 
+                } else {
+                    // Positioned on the ground
+                    this.y = groundLevel - this.height;
+                }
+            }
+
+            draw() {
+                if (!this.active && !this.hit) return; // Don't draw if deactivated and not the one hit
+
+                // Draw Sign Pole
+                ctx.fillStyle = "#5c4033"; // Dark brown
+                ctx.fillRect(this.x + this.width/2 - 5, this.y + this.height, 10, groundLevel - (this.y + this.height));
+
+                // Draw Wooden Board
+                ctx.fillStyle = this.hit ? (this.isCorrect ? "#4ade80" : "#f87171") : "#8b5a2b"; // Green if right, Red if wrong, Brown default
+                ctx.strokeStyle = "#3e2723";
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.roundRect(this.x, this.y, this.width, this.height, 10);
+                ctx.fill();
+                ctx.stroke();
+
+                // Draw Wood grain lines (simple)
+                if(!this.hit) {
+                    ctx.strokeStyle = "#704214";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x + 10, this.y + 15); ctx.lineTo(this.x + this.width - 20, this.y + 15);
+                    ctx.moveTo(this.x + 20, this.y + 35); ctx.lineTo(this.x + this.width - 10, this.y + 35);
+                    ctx.moveTo(this.x + 10, this.y + 55); ctx.lineTo(this.x + this.width - 30, this.y + 55);
+                    ctx.stroke();
+                }
+
+                // Draw Text
+                ctx.fillStyle = this.hit ? "#fff" : "#ffedd5"; // Light text
+                ctx.font = "bold 20px 'Kanit'";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.shadowColor = "rgba(0,0,0,0.8)";
+                ctx.shadowBlur = 4;
+                
+                // Truncate text if too long
+                let displayTxt = this.text;
+                if(displayTxt.length > 18) displayTxt = displayTxt.substring(0, 16) + "...";
+                
+                ctx.fillText(displayTxt, this.x + this.width / 2, this.y + this.height / 2);
+                ctx.shadowColor = "transparent";
+
+                // If hit, show feedback emoji
+                if (this.hit) {
+                    ctx.font = "40px Arial";
+                    ctx.fillText(this.isCorrect ? "✅" : "❌", this.x + this.width / 2, this.y - 20);
+                }
+            }
+
+            update() {
+                this.x -= gameSpeed;
+            }
+        }
+
+        let signs = [];
+        
+        // Background Elements (Parallax)
+        const scenery = {
+            trees: [],
+            clouds: [],
+            init() {
+                this.trees = [];
+                this.clouds = [];
+                for(let i=0; i<5; i++) {
+                    this.trees.push({x: Math.random() * canvas.width * 2, y: groundLevel, size: 40 + Math.random()*30});
+                    this.clouds.push({x: Math.random() * canvas.width * 2, y: Math.random() * (canvas.height*0.4), speed: 0.5 + Math.random()});
+                }
+            },
+            draw() {
+                // Draw Sky
+                let gradient = ctx.createLinearGradient(0, 0, 0, groundLevel);
+                gradient.addColorStop(0, "#87CEEB");
+                gradient.addColorStop(1, "#E0F6FF");
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw Clouds
+                ctx.font = "60px Arial";
+                this.clouds.forEach(c => {
+                    ctx.globalAlpha = 0.8;
+                    ctx.fillText("☁️", c.x, c.y);
+                    c.x -= c.speed;
+                    if (c.x < -100) { c.x = canvas.width + 50; c.y = Math.random() * (canvas.height*0.4); }
+                });
+                ctx.globalAlpha = 1.0;
+
+                // Draw Sun/Temple silhouette in background
+                ctx.font = "150px Arial";
+                ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+                ctx.fillText("🕍", canvas.width * 0.7, groundLevel - 130);
+
+                // Draw Trees
+                ctx.font = "80px Arial";
+                this.trees.forEach(t => {
+                    ctx.fillText("🌴", t.x, t.y - 65);
+                    t.x -= gameSpeed * 0.5; // Parallax effect
+                    if (t.x < -100) t.x = canvas.width + Math.random() * 200;
+                });
+
+                // Draw Ground
+                ctx.fillStyle = "#4ade80"; // Light green grass
+                ctx.fillRect(0, groundLevel, canvas.width, canvas.height - groundLevel);
+                // Ground detail
+                ctx.fillStyle = "#22c55e"; // Darker green line
+                ctx.fillRect(0, groundLevel, canvas.width, 10);
+                
+                // Dirt below
+                ctx.fillStyle = "#8B4513";
+                ctx.fillRect(0, groundLevel + 10, canvas.width, canvas.height - groundLevel - 10);
+            }
+        };
+
+
+        function spawnQuestion() {
+            if (currentQuestionIndex >= maxQuestions) {
+                endGame();
+                return;
+            }
+
+            const qData = selectedQuestions[currentQuestionIndex];
+            
+            // Update UI
+            questionNumber.innerText = `ข้อที่ ${currentQuestionIndex + 1} / ${maxQuestions}`;
+            questionText.innerText = qData.q;
+            questionText.classList.remove('animate-pop');
+            void questionText.offsetWidth; // trigger reflow
+            questionText.classList.add('animate-pop');
+
+            // Determine which answer goes to top/bottom
+            const isAns1Correct = qData.ans === 1;
+            const topGetsAns1 = Math.random() > 0.5;
+
+            let topText, botText, isTopCorrect, isBotCorrect;
+
+            if (topGetsAns1) {
+                topText = qData.a1;
+                botText = qData.a2;
+                isTopCorrect = isAns1Correct;
+                isBotCorrect = !isAns1Correct;
+            } else {
+                topText = qData.a2;
+                botText = qData.a1;
+                isTopCorrect = !isAns1Correct;
+                isBotCorrect = isAns1Correct;
+            }
+
+            // Spawn slightly off-screen to the right
+            const spawnX = canvas.width + 100;
+            signs = [
+                new Sign(spawnX, 'top', topText, isTopCorrect),
+                new Sign(spawnX, 'bottom', botText, isBotCorrect)
+            ];
+            
+            state = 'PLAYING';
+            // Increase speed slightly over time
+            gameSpeed = 4 + (currentQuestionIndex * 0.3);
+        }
+
+        function handleCollision() {
+            if (state !== 'PLAYING') return;
+
+            // Simplified collision: Bounding box check
+            const hitMargin = 10;
+            const rx = rabbit.x + hitMargin;
+            const ry = rabbit.y + hitMargin;
+            const rw = rabbit.width - hitMargin * 2;
+            const rh = rabbit.height - hitMargin * 2;
+
+            for (let sign of signs) {
+                if (!sign.active) continue;
+
+                if (rx < sign.x + sign.width &&
+                    rx + rw > sign.x &&
+                    ry < sign.y + sign.height &&
+                    ry + rh > sign.y) {
+                    
+                    // Collision Detected!
+                    processAnswer(sign);
+                    break; // Process only one hit
+                }
+            }
+
+            // Check if signs passed without being hit (missed both)
+            if (signs.length > 0 && signs[0].x + signs[0].width < rabbit.x && state === 'PLAYING') {
+                // If the player passed the signs without hitting them (e.g. jumped too early/late and landed between)
+                // Default to evaluating based on rabbit's Y position relative to bottom sign
+                let targetSign = (rabbit.y > groundLevel - 100) ? signs.find(s=>s.lane==='bottom') : signs.find(s=>s.lane==='top');
+                if(targetSign) processAnswer(targetSign);
+            }
+        }
+
+        function processAnswer(hitSign) {
+            state = 'RESULT_WAIT';
+            hitSign.hit = true;
+
+            // Deactivate both signs
+            signs.forEach(s => s.active = false);
+
+            if (hitSign.isCorrect) {
+                score++;
+                scoreDisplay.innerText = score;
+                scoreDisplay.parentElement.classList.add('animate-pop');
+                setTimeout(() => scoreDisplay.parentElement.classList.remove('animate-pop'), 500);
+            }
+
+            // Flash effect based on answer
+            const flashColor = hitSign.isCorrect ? 'rgba(74, 222, 128, 0.4)' : 'rgba(248, 113, 113, 0.4)';
+            ctx.fillStyle = flashColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Wait a moment, then load next question
+            setTimeout(() => {
+                currentQuestionIndex++;
+                signs = []; // Clear current signs
+                spawnQuestion();
+            }, 1500);
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            scenery.draw();
+
+            if (state === 'PLAYING' || state === 'RESULT_WAIT') {
+                rabbit.update();
+                rabbit.draw();
+
+                signs.forEach(sign => {
+                    sign.update();
+                    sign.draw();
+                });
+
+                handleCollision();
+            }
+
+            if (state !== 'GAMEOVER') {
+                animationId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+
+        function startGame() {
+            // Setup
+            resizeCanvas();
+            scenery.init();
+            score = 0;
+            currentQuestionIndex = 0;
+            scoreDisplay.innerText = score;
+            rabbit.y = groundLevel - rabbit.height;
+            rabbit.vy = 0;
+            signs = [];
+
+            // Shuffle questions and pick 10
+            let pool = [...questionBank];
+            shuffleArray(pool);
+            selectedQuestions = pool.slice(0, maxQuestions);
+
+            // UI
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            hud.classList.remove('hidden');
+            instructions.classList.remove('hidden'); // Show instructions at start
+
+            spawnQuestion();
+            gameLoop();
+        }
+
+        function endGame() {
+            state = 'GAMEOVER';
+            cancelAnimationFrame(animationId);
+            hud.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+
+            finalScore.innerText = score;
+            
+            if (score === 10) {
+                resultMessage.innerText = "สมบูรณ์แบบ! แฟนพันธุ์แท้สุนทรภู่ตัวจริง 🎉";
+                resultIcon.innerText = "🏆";
+            } else if (score >= 7) {
+                resultMessage.innerText = "เก่งมาก! ความรู้แน่นปึ้ก 👍";
+                resultIcon.innerText = "🌟";
+            } else if (score >= 4) {
+                resultMessage.innerText = "พอใช้ได้! ลองศึกษาผลงานท่านเพิ่มอีกนิดนะ 😊";
+                resultIcon.innerText = "👍";
+            } else {
+                resultMessage.innerText = "ต้องพยายามขึ้นอีกนิด! ลองเล่นใหม่อีกครั้งนะ ✌️";
+                resultIcon.innerText = "📚";
+            }
+        }
+
+        // Input Handling
+        function handleInput(e) {
+            if (state === 'START') {
+                startGame();
+            } else if (state === 'PLAYING') {
+                rabbit.jump();
+            } else if (state === 'GAMEOVER') {
+                // Prevent immediate restart on multi-tap
+                if(e.type === 'keydown' && e.code === 'Space') {
+                   // startGame();
+                }
+            }
+            
+            // Prevent default behavior for spacebar to stop page scrolling
+            if (e.type === 'keydown' && e.code === 'Space') {
+                e.preventDefault();
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') {
+                handleInput(e);
+            }
+        });
+
+        // Touch support for mobile
+        window.addEventListener('touchstart', (e) => {
+            if(e.target.tagName !== 'BUTTON') {
+                handleInput(e);
+            }
+        }, {passive: false}); // passive: false allows preventDefault if needed, though not strictly required here
+
+        // Buttons
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('restart-btn').addEventListener('click', startGame);
+
+        // Initial setup
+        resizeCanvas();
+        scenery.init();
+        scenery.draw(); // Draw initial background behind start screen
+
+    </script>
+</body>
+</html>
